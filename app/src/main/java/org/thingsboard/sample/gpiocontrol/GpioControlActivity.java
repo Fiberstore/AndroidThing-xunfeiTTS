@@ -16,6 +16,9 @@
 package org.thingsboard.sample.gpiocontrol;
 
 import android.app.Activity;
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -28,12 +31,21 @@ import com.iflytek.cloud.SynthesizerListener;
 
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.thingsboard.sample.gpiocontrol.tts.TtsOutput;
+import org.thingsboard.sample.gpiocontrol.util.WriteReadADBShell;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class GpioControlActivity extends Activity implements InitListener, SynthesizerListener {
 
@@ -99,10 +111,41 @@ public class GpioControlActivity extends Activity implements InitListener, Synth
         }
     }
 
+
     @Override
     protected void onStart() {
         super.onStart();
         mqttConnect();
+        getDeviceTemplate(2);
+    }
+
+    /**
+     * 获取CPU温度信息
+     */
+    private void getDeviceTemplate(int seconds) {
+        ScheduledExecutorService scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
+        long initialDelay = 1;
+        // 从现在开始1秒钟之后，每隔1秒钟执行一次job1
+        scheduledExecutorService.scheduleAtFixedRate(new RemindTask(), initialDelay, seconds, TimeUnit.SECONDS);
+    }
+
+    class RemindTask implements Runnable {
+        @Override
+        public void run() {
+            String read = WriteReadADBShell.read("/sys/class/thermal/thermal_zone0/temp");
+            double temp = Integer.parseInt(read) / 1000.0;
+            Log.e("temp:", temp + "");
+            JSONObject jsonObject = new JSONObject();
+            try {
+                String temperatureJSON = jsonObject.put("temperature", temp).toString();
+                MqttMessage mqttMessage = new MqttMessage(temperatureJSON.getBytes());
+              //  ttsOutput.startPlaySuond(temp+"", GpioControlActivity.this);
+                mThingsboardMqttClient.publish("v1/devices/me/attributes", mqttMessage);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
     }
 
     @Override
@@ -231,7 +274,7 @@ public class GpioControlActivity extends Activity implements InitListener, Synth
         /**语音输出*/
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(enabled == true ? "打开" : "关闭");
-        stringBuilder.append(pin+" ");
+        stringBuilder.append(pin + " ");
         ttsOutput.startPlaySuond(stringBuilder.toString(), this);
 
         Log.e("tts", stringBuilder.toString());

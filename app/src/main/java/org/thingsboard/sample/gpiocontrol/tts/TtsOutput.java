@@ -10,7 +10,6 @@ import com.iflytek.cloud.SpeechConstant;
 import com.iflytek.cloud.SpeechSynthesizer;
 import com.iflytek.cloud.SynthesizerListener;
 
-import static android.R.attr.text;
 
 /**
  * @author 作者：张祥 on 2018/2/1 0001.
